@@ -229,7 +229,29 @@ def evaluate_mbpp_results(directory, tokenizer_path):
     print(f"  - Avg. Total Tokens:   {avg_len:.2f}")
     print(f"  - Avg. Effective Tokens Ratio: {(100-eot_prop):.2f}%")
     print("=" * 80 + "\n")
+    results_dict = {
+        "directory": directory,
+        "total_samples": total_samples,
+        "processed": agg_stats["processed"],
+        "failed_extraction": agg_stats["failed_extraction"],
+        "failed_entry_point": agg_stats["failed_entry_point"],
+        "accuracy": accuracy,
+        "pass@1": pass_1_score,
+        "correct_answers": correct_answers,
+        "avg_total_tokens": avg_len,
+        "avg_effective_tokens": avg_effective_len,
+        "effective_ratio_percent": (100 - eot_prop),
+        # "predictions": all_predictions,   # 保存预测
+        "references": all_references      # 保存参考答案
+    }
 
+    save_path = os.path.join(directory, "evaluation_results.json")
+    try:
+        with open(save_path, "w", encoding="utf-8") as f:
+            json.dump(results_dict, f, indent=2, ensure_ascii=False)
+        print(f"\nResults saved to {save_path}")
+    except Exception as e:
+        print(f"Failed to save results: {e}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

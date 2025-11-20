@@ -140,7 +140,6 @@ def count_special_tokens(text: str) -> int:
     special_tokens_pattern = r"\[DONE\]|<\|eot_id\|>|<\|endoftext\|>"
     return len(re.findall(special_tokens_pattern, text))
 
-
 def evaluate_humaneval_results(directory, tokenizer_path):
     print("\n" + "="*50 + f"\nProcessing HumanEval directory: {directory}\n" + "="*50)
     try:
@@ -153,6 +152,7 @@ def evaluate_humaneval_results(directory, tokenizer_path):
         print(f"Warning: No .jsonl files found in directory '{directory}'.")
         return
     all_predictions, all_references = [], []
+    detailed_items = []   # 保存逐条详细信息
     agg_stats = {
         "processed": 0,
         "total_raw_tokens": 0,
@@ -162,27 +162,43 @@ def evaluate_humaneval_results(directory, tokenizer_path):
     print(f"Found {len(jsonl_files)} files to process...")
     for file_path in jsonl_files:
         print(f"  -> Processing file: {os.path.basename(file_path)}")
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                for line in f:                    
-                    if not line.strip():
-                        continue
-                    item = json.loads(line)
-                    raw_generation = item['resps'][0][0]
-                    prompt = item["doc"]["prompt"]
-                    entry_point = item["doc"]["entry_point"]
-                    reference = item["target"]
-                    agg_stats["total_raw_tokens"] += count_total_tokens(raw_generation, tokenizer)
-                    agg_stats["total_special_tokens"] += count_special_tokens(raw_generation)
-                    code_to_sanitize = raw_generation.split("```python\n", 1)[-1].split("```")[0]
-                    full_text = prompt + "\n" + code_to_sanitize
-                    sanitized_code = sanitize(full_text, entry_point)
-                    all_predictions.append([sanitized_code])
-                    all_references.append(reference)
-                    agg_stats["processed"] += 1
-        except (KeyError, IndexError, json.JSONDecodeError) as e:
-            print(f"    Error processing file '{os.path.basename(file_path)}': {e}")
-            continue
+        # try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                item = json.loads(line)
+                raw_generation = item['resps'][0][0]
+                prompt = item["doc"]["prompt"]
+                entry_point = item["doc"]["entry_point"]
+                reference = item["target"]
+
+                tokens = count_total_tokens(raw_generation, tokenizer)
+                specials = count_special_tokens(raw_generation)
+                agg_stats["total_raw_tokens"] += tokens
+                agg_stats["total_special_tokens"] += specials
+
+                code_to_sanitize = raw_generation.split("```python\n", 1)[-1].split("```")[0]
+                full_text = prompt + "\n" + code_to_sanitize
+                sanitized_code = sanitize(full_text, entry_point)
+
+                all_predictions.append([sanitized_code])
+                all_references.append(reference)
+                agg_stats["processed"] += 1
+
+                detailed_items.append({
+                    "prompt": prompt,
+                    "entry_point": entry_point,
+                    "raw_generation": raw_generation,
+                    "sanitized_code": sanitized_code,
+                    "reference": reference,
+                    "total_tokens": tokens,
+                    "special_tokens": specials,
+                })
+        # except (KeyError, IndexError, json.JSONDecodeError) as e:
+        #     print(f"    Error processing file '{os.path.basename(file_path)}': {e}")
+        #     continue
+
     total_processed = agg_stats["processed"]
     print(f"\nLoading the code_eval evaluator and starting evaluation...")
     code_eval = hf_evaluate.load("code_eval")
@@ -198,11 +214,12 @@ def evaluate_humaneval_results(directory, tokenizer_path):
         accuracy = pass_1_score * 100
         avg_len = agg_stats["total_raw_tokens"] / total_processed
         effective_tokens = agg_stats["total_raw_tokens"] - agg_stats["total_special_tokens"]
-        avg_effective_len = effective_tokens / total_processed if total_processed > 0 else 0
+        avg_effective_len = effective_tokens / total_processed
         eot_prop = (agg_stats["total_special_tokens"] / agg_stats["total_raw_tokens"] * 100) if agg_stats["total_raw_tokens"] > 0 else 0
     else:
         print("No valid data processed. Cannot calculate results.")
         return
+
     print("\n" + "-" * 80)
     print(f"Results for '{os.path.basename(directory)}'")
     print("-" * 80)
@@ -211,6 +228,28 @@ def evaluate_humaneval_results(directory, tokenizer_path):
     print(f"  - Avg. Total Tokens:   {avg_len:.2f}")
     print(f"  - Avg. Effective Tokens Ratio: {(100-eot_prop):.2f}%")
     print("=" * 80 + "\n")
+
+    # ====== 新增保存 JSON ======
+    results_dict = {
+        "directory": directory,
+        "total_processed": total_processed,
+        "correct_answers": correct_answers,
+        "accuracy": accuracy,
+        "avg_total_tokens": avg_len,
+        "avg_effective_tokens": avg_effective_len,
+        "effective_ratio_percent": (100 - eot_prop),
+        "total_raw_tokens": agg_stats["total_raw_tokens"],
+        "total_special_tokens": agg_stats["total_special_tokens"],
+        # "items": detailed_items
+    }
+
+    save_path = os.path.join(directory, "humaneval_results.json")
+    try:
+        with open(save_path, "w", encoding="utf-8") as f:
+            json.dump(results_dict, f, indent=2, ensure_ascii=False)
+        print(f"Results saved to {save_path}")
+    except Exception as e:
+        print(f"Failed to save results: {e}")
 
 
 if __name__ == "__main__":

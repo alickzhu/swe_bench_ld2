@@ -55,6 +55,8 @@ def fix_fracs(string):
         substrs = substrs[1:]
         for substr in substrs:
             new_str += "\\frac"
+            if len(substr) == 0:
+                continue
             if substr[0] == "{":
                 new_str += substr
             else:
@@ -131,7 +133,7 @@ def strip_string(string):
     string = string.replace("tfrac", "frac").replace("dfrac", "frac")
     string = string.replace("\\left", "").replace("\\right", "")
     string = string.replace("^{\\circ}", "").replace("^\\circ", "")
-    string = string.replace("\\$", "").replace("\\%", "").replace("\%", "")
+    string = string.replace("\\$", "").replace("\\%", "").replace("%", "")
     string = remove_right_units(string)
     if string.startswith("."):
         string = "0" + string
@@ -252,19 +254,19 @@ def evaluate_math500_results(directory, tokenizer_path):
     print(f"Found {len(jsonl_files)} files to process...")
     for file_path in jsonl_files:
         print(f"  -> Processing file: {os.path.basename(file_path)}")
-        try:
-            (
-                correct, processed, detailed_results,
-                raw_tokens, eot_count,
-            ) = parse_math500_answers_from_jsonl(json_path=file_path, tokenizer=tokenizer)
-            agg_results["correct"] += correct
-            agg_results["processed"] += processed
-            agg_results["total_raw_tokens"] += raw_tokens
-            agg_results["total_eot"] += eot_count
-            agg_results["all_items"].extend(detailed_results)
-        except Exception as e:
-            print(f"    Error processing file '{os.path.basename(file_path)}': {e}")
-            continue
+        # try:
+        (
+            correct, processed, detailed_results,
+            raw_tokens, eot_count,
+        ) = parse_math500_answers_from_jsonl(json_path=file_path, tokenizer=tokenizer)
+        agg_results["correct"] += correct
+        agg_results["processed"] += processed
+        agg_results["total_raw_tokens"] += raw_tokens
+        agg_results["total_eot"] += eot_count
+        agg_results["all_items"].extend(detailed_results)
+        # except Exception as e:
+        #     print(f"    Error processing file '{os.path.basename(file_path)}': {e}")
+        #     continue
     total_processed = agg_results["processed"]
     if total_processed > 0:
         accuracy = (agg_results["correct"] / total_processed) * 100
@@ -284,6 +286,27 @@ def evaluate_math500_results(directory, tokenizer_path):
     print(f"  - Avg. Effective Tokens Ratio: {(100-eot_prop):.2f}%")
     print("=" * 80 + "\n")
         
+    # ===== 新增：保存结果到 JSON =====
+    results_dict = {
+        "directory": directory,
+        "total_processed": total_processed,
+        "correct": agg_results["correct"],
+        "accuracy": accuracy,
+        "avg_total_tokens": avg_len,
+        "avg_effective_tokens": avg_effective_len,
+        "effective_ratio_percent": (100 - eot_prop),
+        "total_raw_tokens": agg_results["total_raw_tokens"],
+        "total_eot": agg_results["total_eot"],
+        # "items": agg_results["all_items"]  # 每个样本的详细信息
+    }
+
+    save_path = os.path.join(directory, "math500_results.json")
+    try:
+        with open(save_path, "w", encoding="utf-8") as f:
+            json.dump(results_dict, f, indent=2, ensure_ascii=False)
+        print(f"Results saved to {save_path}")
+    except Exception as e:
+        print(f"Failed to save results: {e}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

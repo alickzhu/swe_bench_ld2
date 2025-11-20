@@ -55,6 +55,8 @@ def fix_fracs(string):
         substrs = substrs[1:]
         for substr in substrs:
             new_str += "\\frac"
+            if not substr:
+                continue
             if substr[0] == "{":
                 new_str += substr
             else:
@@ -131,7 +133,7 @@ def strip_string(string):
     string = string.replace("tfrac", "frac").replace("dfrac", "frac")
     string = string.replace("\\left", "").replace("\\right", "")
     string = string.replace("^{\\circ}", "").replace("^\\circ", "")
-    string = string.replace("\\$", "").replace("\\%", "").replace("\%", "")
+    string = string.replace("\\$", "").replace("\\%", "").replace("%", "")
     string = remove_right_units(string)
     if string.startswith("."):
         string = "0" + string
@@ -265,6 +267,7 @@ def evaluate_gsm8k_results(directory, tokenizer_path):
         except Exception as e:
             print(f"    Error processing file '{os.path.basename(file_path)}': {e}")
             continue
+
     total_processed = agg_results["processed"]
     if total_processed > 0:
         accuracy = (agg_results["correct"] / total_processed) * 100
@@ -275,6 +278,7 @@ def evaluate_gsm8k_results(directory, tokenizer_path):
     else:
         print("No valid data processed. Cannot calculate results.")
         return
+
     print("\n" + "-" * 80)
     print(f"Results for '{os.path.basename(directory)}'")
     print("-" * 80)
@@ -284,7 +288,28 @@ def evaluate_gsm8k_results(directory, tokenizer_path):
     print(f"  - Avg. Effective Tokens Ratio: {(100-eot_prop):.2f}%")
     print("=" * 80 + "\n")
 
-        
+    # ===== 新增：保存结果到 JSON =====
+    results_dict = {
+        "directory": directory,
+        "total_processed": total_processed,
+        "correct": agg_results["correct"],
+        "accuracy": accuracy,
+        "avg_total_tokens": avg_len,
+        "avg_effective_tokens": avg_effective_len,
+        "effective_ratio_percent": (100 - eot_prop),
+        "total_raw_tokens": agg_results["total_raw_tokens"],
+        "total_eot": agg_results["total_eot"],
+        # "items": agg_results["all_items"]  # 每个样本的详细结果
+    }
+
+    save_path = os.path.join(directory, "gsm8k_results.json")
+    try:
+        with open(save_path, "w", encoding="utf-8") as f:
+            json.dump(results_dict, f, indent=2, ensure_ascii=False)
+        print(f"Results saved to {save_path}")
+    except Exception as e:
+        print(f"Failed to save results: {e}")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(

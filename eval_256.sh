@@ -15,7 +15,7 @@ fi
 echo ">>> Starting batch LLaDA2 evaluation with multiple parameter configurations..."
 
 
-BASE_OUTPUT_PATH="/mnt/blob-openpai-shuailu1-out/qinglin/iclr/LLADA2_256/"
+BASE_OUTPUT_PATH="/mnt/blob-openpai-shuailu1-out/qinglin/iclr/LLADA2_256_new/"
 MODEL_PATH="LLaDA2.0-mini-preview"
 
 # 创建输出目录
@@ -31,7 +31,7 @@ echo ">>> Environment setup completed. Starting evaluation runs..."
 # if_early_stop: 1 (固定)
 configs=(
     "0.93 0.07 2 0.9 1"
-    "0.93 0.07 6 0.9 1"
+    "0.90 0.07 6 0.9 1"
     "0.9 0 6 0.9 1"
     "0.85 0 20 0.95 1"
 )
